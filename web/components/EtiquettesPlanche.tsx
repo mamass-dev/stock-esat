@@ -131,7 +131,6 @@ export default function EtiquettesPlanche({
             <div className="etq-txt">
               <div className="etq-nom">{p.nom}</div>
               <div className="etq-ref">{p.ref}</div>
-              {p.site && <div className="etq-site">📍 {p.site}</div>}
             </div>
           </div>
         ))}

@@ -24,7 +24,6 @@ export default async function FicheProduit({
 
   const qr = await QRCode.toDataURL(`P:${p.ref}`, { margin: 1, width: 300 });
   const s = statut(p);
-  const lieu = p.sites?.nom ?? null;
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
@@ -93,12 +92,7 @@ export default async function FicheProduit({
         {/* Étiquette */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
           <h2 className="font-bold text-slate-900 mb-4">Étiquette QR</h2>
-          <EtiquetteProduit
-            qr={qr}
-            nom={p.nom}
-            reference={p.ref}
-            lieu={lieu}
-          />
+          <EtiquetteProduit qr={qr} nom={p.nom} reference={p.ref} />
         </div>
       </div>
     </div>

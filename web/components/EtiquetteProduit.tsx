@@ -4,12 +4,10 @@ export default function EtiquetteProduit({
   qr,
   nom,
   reference,
-  lieu,
 }: {
   qr: string;
   nom: string;
   reference: string;
-  lieu: string | null;
 }) {
   return (
     <div>
@@ -24,9 +22,6 @@ export default function EtiquetteProduit({
           <div className="text-sm font-mono text-slate-500 mt-1">
             {reference}
           </div>
-          {lieu && (
-            <div className="text-sm text-slate-700 mt-2">📍 {lieu}</div>
-          )}
         </div>
       </div>
 
