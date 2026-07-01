@@ -30,9 +30,13 @@ class Categorie {
 class Site {
   final String id;
   final String nom;
-  Site({required this.id, required this.nom});
-  factory Site.fromMap(Map<String, dynamic> m) =>
-      Site(id: m['id'] as String, nom: m['nom'] as String);
+  final String type; // 'Site' | 'Prestation'
+  Site({required this.id, required this.nom, this.type = 'Site'});
+  factory Site.fromMap(Map<String, dynamic> m) => Site(
+        id: m['id'] as String,
+        nom: m['nom'] as String,
+        type: (m['type'] ?? 'Site') as String,
+      );
 }
 
 class Produit {

@@ -128,8 +128,12 @@ class _State extends ConsumerState<ModifierProduitScreen> {
               sites.when(
                 loading: () => const SizedBox(),
                 error: (e, _) => const SizedBox(),
-                data: (list) => _dropdown<Site>('Site', list, _siteId,
-                    (s) => s.id, (s) => s.nom, (v) => setState(() => _siteId = v)),
+                data: (list) => _dropdown<Site>(
+                    'Lieu / Affectation', list, _siteId, (s) => s.id,
+                    (s) => s.type == 'Prestation'
+                        ? '${s.nom} · prestation'
+                        : s.nom,
+                    (v) => setState(() => _siteId = v)),
               ),
               _champ(_unite, 'Unité', hint: 'bidon, sac, boîte…'),
               _champ(_seuilMini, 'Seuil mini (alerte 🟠)', number: true),

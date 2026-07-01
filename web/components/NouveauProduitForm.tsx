@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Ref } from "@/lib/data";
+import type { Ref, Lieu } from "@/lib/data";
 import { sb } from "@/lib/supabase";
 import { genererRef } from "@/lib/genRef";
 
@@ -22,7 +22,7 @@ export default function NouveauProduitForm({
   existants,
 }: {
   categories: Ref[];
-  sites: Ref[];
+  sites: Lieu[];
   existants: { nom: string; ref: string }[];
 }) {
   const router = useRouter();
@@ -174,7 +174,7 @@ export default function NouveauProduitForm({
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-600 mb-1">
-            Site
+            Lieu / Affectation
           </label>
           <select
             value={siteId}
@@ -182,11 +182,24 @@ export default function NouveauProduitForm({
             className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white outline-none focus:border-[#2557D6]"
           >
             <option value="">—</option>
-            {sites.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.nom}
-              </option>
-            ))}
+            <optgroup label="Sites">
+              {sites
+                .filter((s) => s.type === "Site")
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nom}
+                  </option>
+                ))}
+            </optgroup>
+            <optgroup label="Prestations">
+              {sites
+                .filter((s) => s.type === "Prestation")
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nom}
+                  </option>
+                ))}
+            </optgroup>
           </select>
         </div>
 

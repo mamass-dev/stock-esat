@@ -9,6 +9,9 @@ import '../../data/repositories.dart';
 final produitsProvider = FutureProvider<List<Produit>>(
     (ref) => ref.read(produitRepoProvider).tous());
 
+final lieuxProvider = FutureProvider<List<Site>>(
+    (ref) => ref.read(produitRepoProvider).sites());
+
 enum FiltreStock { tous, ok, faible, rupture }
 
 class StocksScreen extends ConsumerStatefulWidget {
@@ -20,6 +23,7 @@ class StocksScreen extends ConsumerStatefulWidget {
 class _StocksScreenState extends ConsumerState<StocksScreen> {
   FiltreStock _filtre = FiltreStock.tous;
   String _query = '';
+  String? _lieuId; // filtre par site/prestation
 
   FiltreStock _statut(Produit p) {
     if (p.stockCourant <= p.seuilRupture) return FiltreStock.rupture;
@@ -33,6 +37,7 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(produitsProvider);
+    final lieux = ref.watch(lieuxProvider).valueOrNull ?? const <Site>[];
     return Scaffold(
       appBar: AppBar(title: const Text('Stocks')),
       body: AppBackground(
@@ -51,6 +56,10 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
               var produits = _filtre == FiltreStock.tous
                   ? tous
                   : tous.where((p) => _statut(p) == _filtre).toList();
+              if (_lieuId != null) {
+                produits =
+                    produits.where((p) => p.siteId == _lieuId).toList();
+              }
               if (_query.isNotEmpty) {
                 final q = _query.toLowerCase();
                 produits =
@@ -77,9 +86,16 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                   ),
                   // ── Recherche ──
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(Dim.pad, 14, Dim.pad, 10),
+                    padding: const EdgeInsets.fromLTRB(Dim.pad, 14, Dim.pad, 6),
                     child: _recherche(),
                   ),
+                  // ── Filtre par lieu ──
+                  if (lieux.isNotEmpty)
+                    Padding(
+                      padding:
+                          const EdgeInsets.fromLTRB(Dim.pad, 0, Dim.pad, 8),
+                      child: _filtreLieu(lieux),
+                    ),
                   // ── Ligne d'info / réinitialiser ──
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: Dim.pad),
@@ -159,6 +175,35 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
                       color: sel ? Colors.white : c)),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _filtreLieu(List<Site> lieux) {
+    final sites = lieux.where((l) => l.type == 'Site').toList();
+    final presta = lieux.where((l) => l.type == 'Prestation').toList();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(Dim.radius),
+        boxShadow: Shadows.soft,
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String?>(
+          isExpanded: true,
+          value: _lieuId,
+          hint: const Text('Tous les lieux'),
+          items: [
+            const DropdownMenuItem<String?>(
+                value: null, child: Text('Tous les lieux')),
+            ...sites.map((s) => DropdownMenuItem<String?>(
+                value: s.id, child: Text('📍 ${s.nom}'))),
+            ...presta.map((s) => DropdownMenuItem<String?>(
+                value: s.id, child: Text('🧾 ${s.nom}  ·  prestation'))),
+          ],
+          onChanged: (v) => setState(() => _lieuId = v),
         ),
       ),
     );

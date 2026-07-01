@@ -6,9 +6,10 @@ export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}));
   if (!b.nom?.trim())
     return Response.json({ error: "Nom requis" }, { status: 400 });
+  const type = b.type === "Prestation" ? "Prestation" : "Site";
   const { error } = await sbAdmin()
     .from("sites")
-    .insert({ nom: b.nom.trim(), ville: b.ville?.trim() || null });
+    .insert({ nom: b.nom.trim(), ville: b.ville?.trim() || null, type });
   if (error) return Response.json({ error: error.message }, { status: 400 });
   return Response.json({ ok: true });
 }

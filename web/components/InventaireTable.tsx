@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import type { Produit, Ref } from "@/lib/data";
+import type { Produit, Ref, Lieu } from "@/lib/data";
 
 type Filtre = "tous" | "ok" | "faible" | "rupture";
 
@@ -38,11 +38,13 @@ export default function InventaireTable({
 }: {
   produits: Produit[];
   categories: Ref[];
-  sites: Ref[];
+  sites: Lieu[];
 }) {
   const [items, setItems] = useState(produits);
   const [q, setQ] = useState("");
   const [filtre, setFiltre] = useState<Filtre>("tous");
+  const [catFiltre, setCatFiltre] = useState("");
+  const [lieuFiltre, setLieuFiltre] = useState("");
 
   const [cible, setCible] = useState<Produit | null>(null);
   const [busy, setBusy] = useState(false);
@@ -58,10 +60,15 @@ export default function InventaireTable({
   const liste = useMemo(() => {
     return items.filter((p) => {
       if (filtre !== "tous" && statut(p) !== filtre) return false;
+      if (catFiltre && p.categorie_id !== catFiltre) return false;
+      if (lieuFiltre && p.site_id !== lieuFiltre) return false;
       if (q && !p.nom.toLowerCase().includes(q.toLowerCase())) return false;
       return true;
     });
-  }, [items, q, filtre]);
+  }, [items, q, filtre, catFiltre, lieuFiltre]);
+
+  const sitesSeuls = sites.filter((s) => s.type === "Site");
+  const prestations = sites.filter((s) => s.type === "Prestation");
 
   function flash(msg: string) {
     setToast(msg);
@@ -161,6 +168,43 @@ export default function InventaireTable({
           placeholder="Rechercher un produit…"
           className="flex-1 min-w-[220px] px-4 py-2.5 rounded-xl border border-slate-200 bg-white outline-none focus:border-[#2557D6]"
         />
+        <select
+          value={catFiltre}
+          onChange={(e) => setCatFiltre(e.target.value)}
+          className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white outline-none focus:border-[#2557D6] text-sm"
+        >
+          <option value="">Toutes catégories</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.nom}
+            </option>
+          ))}
+        </select>
+        <select
+          value={lieuFiltre}
+          onChange={(e) => setLieuFiltre(e.target.value)}
+          className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white outline-none focus:border-[#2557D6] text-sm"
+        >
+          <option value="">Tous les lieux</option>
+          {sitesSeuls.length > 0 && (
+            <optgroup label="Sites">
+              {sitesSeuls.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nom}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {prestations.length > 0 && (
+            <optgroup label="Prestations">
+              {prestations.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nom}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </select>
         <div className="flex gap-2">
           {chips.map((c) => (
             <button
@@ -367,7 +411,7 @@ export default function InventaireTable({
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-600 mb-1">
-                  Site
+                  Lieu / Affectation
                 </label>
                 <select
                   value={form.siteId}
@@ -375,11 +419,24 @@ export default function InventaireTable({
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white outline-none focus:border-[#2557D6]"
                 >
                   <option value="">—</option>
-                  {sites.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.nom}
-                    </option>
-                  ))}
+                  {sitesSeuls.length > 0 && (
+                    <optgroup label="Sites">
+                      {sitesSeuls.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.nom}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {prestations.length > 0 && (
+                    <optgroup label="Prestations">
+                      {prestations.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.nom}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
               <div>

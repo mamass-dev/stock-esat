@@ -154,8 +154,9 @@ class _State extends ConsumerState<AjouterProduitScreen> {
               loading: () => const SizedBox(),
               error: (e, _) => const SizedBox(),
               data: (list) => _dropdown<Site>(
-                'Site', list, _siteId,
-                (s) => s.id, (s) => s.nom, (v) => setState(() => _siteId = v)),
+                'Lieu / Affectation', list, _siteId, (s) => s.id,
+                (s) => s.type == 'Prestation' ? '${s.nom} · prestation' : s.nom,
+                (v) => setState(() => _siteId = v)),
             ),
             _champ(_unite, 'Unité', hint: 'bidon, sac, boîte…'),
             _champ(_stock, 'Stock actuel (quantité en réserve)', number: true),

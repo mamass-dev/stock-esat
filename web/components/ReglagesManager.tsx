@@ -8,10 +8,12 @@ function ListManager({
   titre,
   items,
   endpoint,
+  postBody,
 }: {
   titre: string;
   items: Ref[];
   endpoint: string;
+  postBody?: Record<string, unknown>;
 }) {
   const router = useRouter();
   const [nom, setNom] = useState("");
@@ -34,6 +36,13 @@ function ListManager({
     router.refresh();
   }
 
+  function ajouter() {
+    if (nom.trim()) {
+      call("POST", { nom, ...(postBody ?? {}) });
+      setNom("");
+    }
+  }
+
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
       <h2 className="font-bold text-slate-900 mb-4">{titre}</h2>
@@ -43,21 +52,11 @@ function ListManager({
           value={nom}
           onChange={(e) => setNom(e.target.value)}
           placeholder="Nouveau…"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && nom.trim()) {
-              call("POST", { nom });
-              setNom("");
-            }
-          }}
+          onKeyDown={(e) => e.key === "Enter" && ajouter()}
           className="flex-1 px-4 py-2 rounded-xl border border-slate-200 outline-none focus:border-[#2557D6]"
         />
         <button
-          onClick={() => {
-            if (nom.trim()) {
-              call("POST", { nom });
-              setNom("");
-            }
-          }}
+          onClick={ajouter}
           disabled={busy || !nom.trim()}
           className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold disabled:opacity-50"
         >
@@ -104,9 +103,11 @@ function ListManager({
 export default function ReglagesManager({
   categories,
   sites,
+  prestations,
 }: {
   categories: Ref[];
   sites: Ref[];
+  prestations: Ref[];
 }) {
   return (
     <div className="grid md:grid-cols-2 gap-6">
@@ -115,7 +116,18 @@ export default function ReglagesManager({
         items={categories}
         endpoint="/api/admin/categories"
       />
-      <ListManager titre="Sites" items={sites} endpoint="/api/admin/sites" />
+      <ListManager
+        titre="Sites"
+        items={sites}
+        endpoint="/api/admin/sites"
+        postBody={{ type: "Site" }}
+      />
+      <ListManager
+        titre="Prestations"
+        items={prestations}
+        endpoint="/api/admin/sites"
+        postBody={{ type: "Prestation" }}
+      />
     </div>
   );
 }

@@ -64,9 +64,15 @@ export async function getCategories(): Promise<Ref[]> {
   return (data as Ref[]) ?? [];
 }
 
-export async function getSites(): Promise<Ref[]> {
-  const { data } = await sb().from("sites").select("id,nom").order("nom");
-  return (data as Ref[]) ?? [];
+export type Lieu = { id: string; nom: string; type: string };
+
+export async function getSites(): Promise<Lieu[]> {
+  const { data } = await sb()
+    .from("sites")
+    .select("id,nom,type")
+    .order("type")
+    .order("nom");
+  return (data as Lieu[]) ?? [];
 }
 
 export async function getMouvements(limit = 300): Promise<Mouvement[]> {

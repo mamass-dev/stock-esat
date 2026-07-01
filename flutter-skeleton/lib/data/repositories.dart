@@ -139,7 +139,8 @@ class ProduitRepository {
   }
 
   Future<List<Site>> sites() async {
-    final rows = await _sb.from('sites').select('id,nom').order('nom');
+    final rows =
+        await _sb.from('sites').select('id,nom,type').order('type').order('nom');
     return (rows as List).map((e) => Site.fromMap(e)).toList();
   }
 
