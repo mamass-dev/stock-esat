@@ -7,6 +7,7 @@ const items = [
   { href: "/", label: "Tableau de bord", icon: "📊" },
   { href: "/inventaire", label: "Inventaire", icon: "📦" },
   { href: "/a-commander", label: "À commander", icon: "🛒" },
+  { href: "/etiquettes", label: "Étiquettes", icon: "🏷️" },
   { href: "/mouvements", label: "Mouvements", icon: "🔄" },
   { href: "/journal", label: "Journal", icon: "📝" },
   { href: "/operateurs", label: "Opérateurs", icon: "👥" },
