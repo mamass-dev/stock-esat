@@ -1,10 +1,21 @@
 import ExcelJS from "exceljs";
-import { getProduits, aCommander, statut, agreger } from "@/lib/data";
-import type { Mouvement } from "@/lib/data";
+import {
+  getStocks,
+  aCommanderStocks,
+  agregerStocks,
+  agregerMouvements,
+} from "@/lib/data";
+import type { Mouvement, StockLigne } from "@/lib/data";
 import { isAuthed } from "@/lib/auth";
 import { sbAdmin } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
+
+function statutStock(s: StockLigne): "ok" | "faible" | "rupture" {
+  if (s.stock_courant <= s.seuil_rupture) return "rupture";
+  if (s.stock_courant <= s.seuil_mini) return "faible";
+  return "ok";
+}
 
 const BLEU = "FF2557D6";
 const HEADER_FILL: ExcelJS.Fill = {
@@ -71,17 +82,18 @@ export async function GET() {
     return new Response("Non autorisé", { status: 401 });
   }
 
-  const produits = await getProduits();
+  const stocks = await getStocks();
   const { data: mvtData } = await sbAdmin()
     .from("mouvements")
     .select(
-      "type,quantite,stock_avant,stock_apres,cree_le,source,produits(nom),operateurs(nom)"
+      "type,quantite,stock_avant,stock_apres,cree_le,source,produits(nom),operateurs(nom),sites(nom,type)"
     )
     .order("cree_le", { ascending: false })
     .limit(3000);
   const mouvements = (mvtData as unknown as Mouvement[]) ?? [];
-  const cmd = aCommander(produits);
-  const a = agreger(produits, mouvements);
+  const cmd = aCommanderStocks(stocks);
+  const st = agregerStocks(stocks);
+  const a = agregerMouvements(mouvements);
 
   // Consommation par produit (ce mois), complète
   const now = new Date();
@@ -114,11 +126,11 @@ export async function GET() {
   syn.getCell("A2").font = { italic: true, color: { argb: "FF888888" } };
 
   const kpis: [string, number, string][] = [
-    ["Références actives", a.totalRefs, "FFE7EEFB"],
-    ["Unités en stock", a.unites, "FFE7EEFB"],
-    ["🔴 Ruptures", a.rupture, "FFFCE8E8"],
-    ["🟠 Stocks faibles", a.faible, "FFFDF0DD"],
-    ["🟢 Stocks OK", a.ok, "FFE6F6EC"],
+    ["Références actives", st.refs, "FFE7EEFB"],
+    ["Unités en stock", st.unites, "FFE7EEFB"],
+    ["🔴 Ruptures", st.rupture, "FFFCE8E8"],
+    ["🟠 Stocks faibles", st.faible, "FFFDF0DD"],
+    ["🟢 Stocks OK", st.ok, "FFE6F6EC"],
   ];
   let r = 4;
   for (const [label, val, fill] of kpis) {
@@ -145,7 +157,7 @@ export async function GET() {
         labels: ["OK", "Faible", "Rupture"],
         datasets: [
           {
-            data: [a.ok, a.faible, a.rupture],
+            data: [st.ok, st.faible, st.rupture],
             backgroundColor: ["#1E9E5A", "#E8890C", "#E23D3D"],
           },
         ],
@@ -229,20 +241,20 @@ export async function GET() {
     { header: "Référence", key: "ref", width: 20 },
     { header: "Produit", key: "nom", width: 34 },
     { header: "Catégorie", key: "cat", width: 20 },
-    { header: "Site", key: "site", width: 16 },
+    { header: "Lieu", key: "site", width: 16 },
     { header: "Stock", key: "stock", width: 10 },
     { header: "Unité", key: "unite", width: 12 },
     { header: "Seuil mini", key: "smin", width: 12 },
     { header: "Seuil cible", key: "scible", width: 12 },
     { header: "Statut", key: "statut", width: 14 },
   ];
-  for (const p of produits) {
-    const s = statut(p);
+  for (const p of stocks) {
+    const s = statutStock(p);
     const row = inv.addRow({
       ref: p.ref,
       nom: p.nom,
-      cat: p.categories?.nom ?? "",
-      site: p.sites?.nom ?? "",
+      cat: p.categorie_nom ?? "",
+      site: p.site_nom,
       stock: p.stock_courant,
       unite: p.unite ?? "",
       smin: p.seuil_mini,
@@ -256,9 +268,9 @@ export async function GET() {
     };
   }
   // Barre visuelle dans la colonne Stock (E)
-  if (produits.length > 0) {
+  if (stocks.length > 0) {
     inv.addConditionalFormatting({
-      ref: `E2:E${produits.length + 1}`,
+      ref: `E2:E${stocks.length + 1}`,
       rules: [
         {
           type: "dataBar",
@@ -275,6 +287,7 @@ export async function GET() {
   const wc = wb.addWorksheet("À commander");
   wc.columns = [
     { header: "Produit", key: "nom", width: 34 },
+    { header: "Lieu", key: "lieu", width: 16 },
     { header: "Référence", key: "ref", width: 20 },
     { header: "Stock actuel", key: "stock", width: 14 },
     { header: "Seuil cible", key: "scible", width: 12 },
@@ -283,6 +296,7 @@ export async function GET() {
   for (const p of cmd) {
     wc.addRow({
       nom: p.nom,
+      lieu: p.site_nom,
       ref: p.ref,
       stock: p.stock_courant,
       scible: p.seuil_cible,
@@ -291,7 +305,7 @@ export async function GET() {
   }
   if (cmd.length > 0) {
     wc.addConditionalFormatting({
-      ref: `E2:E${cmd.length + 1}`,
+      ref: `F2:F${cmd.length + 1}`,
       rules: [
         {
           type: "dataBar",
@@ -332,6 +346,7 @@ export async function GET() {
     { header: "Date", key: "date", width: 20 },
     { header: "Type", key: "type", width: 12 },
     { header: "Produit", key: "nom", width: 34 },
+    { header: "Lieu", key: "lieu", width: 16 },
     { header: "Par qui", key: "auteur", width: 22 },
     { header: "Quantité", key: "qte", width: 10 },
     { header: "Stock avant", key: "avant", width: 12 },
@@ -342,6 +357,7 @@ export async function GET() {
       date: new Date(m.cree_le).toLocaleString("fr-FR"),
       type: m.type,
       nom: m.produits?.nom ?? "",
+      lieu: m.sites?.nom ?? "",
       auteur: auteur(m),
       qte: m.quantite,
       avant: m.stock_avant,

@@ -90,6 +90,7 @@ export default function MouvementsTable({
               <th className="px-5 py-3 font-semibold">Date</th>
               <th className="px-5 py-3 font-semibold">Type</th>
               <th className="px-5 py-3 font-semibold">Produit</th>
+              <th className="px-5 py-3 font-semibold">Lieu</th>
               <th className="px-5 py-3 font-semibold">Par qui</th>
               <th className="px-5 py-3 font-semibold text-right">Quantité</th>
               <th className="px-5 py-3 font-semibold text-right">Avant → Après</th>
@@ -117,6 +118,11 @@ export default function MouvementsTable({
                   <td className="px-5 py-3 font-medium text-slate-800">
                     {m.produits?.nom ?? "—"}
                   </td>
+                  <td className="px-5 py-3 text-slate-600 whitespace-nowrap">
+                    {m.sites
+                      ? `${m.sites.type === "Prestation" ? "🧾" : "📍"} ${m.sites.nom}`
+                      : "—"}
+                  </td>
                   <td className="px-5 py-3 text-slate-600">{auteur(m)}</td>
                   <td
                     className={`px-5 py-3 text-right font-bold ${
@@ -134,7 +140,7 @@ export default function MouvementsTable({
             })}
             {liste.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-5 py-10 text-center text-slate-400">
+                <td colSpan={7} className="px-5 py-10 text-center text-slate-400">
                   Aucun mouvement
                 </td>
               </tr>

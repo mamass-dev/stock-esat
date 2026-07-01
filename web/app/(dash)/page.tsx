@@ -1,4 +1,9 @@
-import { getProduits, getMouvements, agreger } from "@/lib/data";
+import {
+  getStocks,
+  getMouvements,
+  agregerStocks,
+  agregerMouvements,
+} from "@/lib/data";
 import ConsoChart from "@/components/ConsoChart";
 
 export const dynamic = "force-dynamic";
@@ -27,11 +32,12 @@ function Stat({
 }
 
 export default async function Dashboard() {
-  const [produits, mouvements] = await Promise.all([
-    getProduits(),
+  const [stocks, mouvements] = await Promise.all([
+    getStocks(),
     getMouvements(),
   ]);
-  const a = agreger(produits, mouvements);
+  const st = agregerStocks(stocks);
+  const a = agregerMouvements(mouvements);
   const maxTop = a.top[0]?.total ?? 1;
 
   return (
@@ -43,11 +49,11 @@ export default async function Dashboard() {
 
       {/* Indicateurs */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
-        <Stat n={a.totalRefs} label="Références" color="#2557D6" bg="#E7EEFB" />
-        <Stat n={a.unites} label="Unités" color="#16357E" bg="#E7EEFB" />
-        <Stat n={a.rupture} label="Ruptures" color="#E23D3D" bg="#FCE8E8" />
-        <Stat n={a.faible} label="Faibles" color="#E8890C" bg="#FDF0DD" />
-        <Stat n={a.ok} label="OK" color="#1E9E5A" bg="#E6F6EC" />
+        <Stat n={st.refs} label="Références" color="#2557D6" bg="#E7EEFB" />
+        <Stat n={st.unites} label="Unités" color="#16357E" bg="#E7EEFB" />
+        <Stat n={st.rupture} label="Ruptures" color="#E23D3D" bg="#FCE8E8" />
+        <Stat n={st.faible} label="Faibles" color="#E8890C" bg="#FDF0DD" />
+        <Stat n={st.ok} label="OK" color="#1E9E5A" bg="#E6F6EC" />
       </div>
 
       {/* Graphe + top */}

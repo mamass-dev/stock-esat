@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { getProduits, getCategories, getSites } from "@/lib/data";
-import InventaireTable from "@/components/InventaireTable";
+import { getStocks, getCategories, getSites } from "@/lib/data";
+import StocksTable from "@/components/StocksTable";
 
 export const dynamic = "force-dynamic";
 
 export default async function InventairePage() {
-  const [produits, categories, sites] = await Promise.all([
-    getProduits(),
+  const [stocks, categories, sites] = await Promise.all([
+    getStocks(),
     getCategories(),
     getSites(),
   ]);
@@ -16,7 +16,7 @@ export default async function InventairePage() {
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Inventaire</h1>
           <p className="text-slate-500 mt-1 mb-6">
-            Toutes les références et leur niveau de stock.
+            Tout le stock, par produit et par lieu.
           </p>
         </div>
         <Link
@@ -26,11 +26,7 @@ export default async function InventairePage() {
           ＋ Nouveau produit
         </Link>
       </div>
-      <InventaireTable
-        produits={produits}
-        categories={categories}
-        sites={sites}
-      />
+      <StocksTable stocks={stocks} categories={categories} sites={sites} />
     </div>
   );
 }

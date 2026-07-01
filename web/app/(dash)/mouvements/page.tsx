@@ -9,7 +9,7 @@ export default async function MouvementsPage() {
   const { data } = await sbAdmin()
     .from("mouvements")
     .select(
-      "type,quantite,stock_avant,stock_apres,cree_le,source,produits(nom),operateurs(nom)"
+      "type,quantite,stock_avant,stock_apres,cree_le,source,produits(nom),operateurs(nom),sites(nom,type)"
     )
     .order("cree_le", { ascending: false })
     .limit(500);
