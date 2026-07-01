@@ -7,25 +7,24 @@ insert into sites(nom, ville) values
 ('Ahuy','Ahuy')
 on conflict do nothing;
 
--- Catégories
+-- Catégories (familles génériques)
 insert into categories(nom, ordre) values
-('Détergents',1),('Désinfectants',2),('Sacs poubelle',3),('Papier',4),
-('Lavettes',5),('Gants',6),('Produits sanitaires',7),('Consommables',8)
+('Produits d''entretien',1),('Consommables',2),('Protection / EPI',3),('Matériel',4)
 on conflict do nothing;
 
 -- Produits rattachés au site Quetigny (exemple)
 insert into produits(ref, nom, categorie_id, site_id, unite, prix_unitaire_ht, stock_courant, seuil_mini, seuil_cible)
 values
 ('DET-SOL-5L','Détergent sol 5L',
-   (select id from categories where nom='Détergents'),
+   (select id from categories where nom='Produits d''entretien'),
    (select id from sites where nom='Quetigny'),
    'bidon', 8.50, 24, 6, 30),
 ('GANT-NIT-M','Gants nitrile M',
-   (select id from categories where nom='Gants'),
+   (select id from categories where nom='Protection / EPI'),
    (select id from sites where nom='Quetigny'),
    'boîte', 4.20, 12, 4, 20),
 ('SAC-130L','Sacs poubelle 130L',
-   (select id from categories where nom='Sacs poubelle'),
+   (select id from categories where nom='Consommables'),
    (select id from sites where nom='Quetigny'),
    'rouleau', 6.00, 3, 5, 15)
 on conflict (ref) do nothing;
