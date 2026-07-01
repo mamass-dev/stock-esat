@@ -1,32 +1,17 @@
 import ExcelJS from "exceljs";
-import { getProduits, aCommander, statut } from "@/lib/data";
+import { getProduits, aCommander, statut, agreger } from "@/lib/data";
 import type { Mouvement } from "@/lib/data";
 import { isAuthed } from "@/lib/auth";
 import { sbAdmin } from "@/lib/admin";
 
-function auteur(m: Mouvement): string {
-  if (m.operateurs?.nom) return m.operateurs.nom;
-  if (m.source === "Web") return "Axel";
-  return "";
-}
-
 export const dynamic = "force-dynamic";
 
+const BLEU = "FF2557D6";
 const HEADER_FILL: ExcelJS.Fill = {
   type: "pattern",
   pattern: "solid",
-  fgColor: { argb: "FF2557D6" },
+  fgColor: { argb: BLEU },
 };
-
-function styliserEntete(ws: ExcelJS.Worksheet) {
-  ws.getRow(1).eachCell((c) => {
-    c.fill = HEADER_FILL;
-    c.font = { bold: true, color: { argb: "FFFFFFFF" } };
-  });
-  ws.getRow(1).height = 22;
-  ws.views = [{ state: "frozen", ySplit: 1 }];
-}
-
 const STATUT_FILL: Record<string, string> = {
   ok: "FFE6F6EC",
   faible: "FFFDF0DD",
@@ -38,10 +23,54 @@ const STATUT_TXT: Record<string, string> = {
   rupture: "🔴 Rupture",
 };
 
+function styliserEntete(ws: ExcelJS.Worksheet) {
+  ws.getRow(1).eachCell((c) => {
+    c.fill = HEADER_FILL;
+    c.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    c.alignment = { vertical: "middle" };
+  });
+  ws.getRow(1).height = 22;
+  ws.views = [{ state: "frozen", ySplit: 1 }];
+}
+
+function auteur(m: Mouvement): string {
+  if (m.operateurs?.nom) return m.operateurs.nom;
+  if (m.source === "Web") return "Axel";
+  return "";
+}
+
+// Graphique -> PNG via QuickChart (échec silencieux si indisponible).
+async function chartPng(
+  config: unknown,
+  width: number,
+  height: number
+): Promise<ArrayBuffer | null> {
+  try {
+    const res = await fetch("https://quickchart.io/chart", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chart: config,
+        width,
+        height,
+        backgroundColor: "white",
+        format: "png",
+        version: "4",
+        devicePixelRatio: 2,
+      }),
+    });
+    if (!res.ok) return null;
+    return await res.arrayBuffer();
+  } catch {
+    return null;
+  }
+}
+
 export async function GET() {
   if (!(await isAuthed())) {
     return new Response("Non autorisé", { status: 401 });
   }
+
   const produits = await getProduits();
   const { data: mvtData } = await sbAdmin()
     .from("mouvements")
@@ -49,14 +78,152 @@ export async function GET() {
       "type,quantite,stock_avant,stock_apres,cree_le,source,produits(nom),operateurs(nom)"
     )
     .order("cree_le", { ascending: false })
-    .limit(2000);
+    .limit(3000);
   const mouvements = (mvtData as unknown as Mouvement[]) ?? [];
   const cmd = aCommander(produits);
+  const a = agreger(produits, mouvements);
+
+  // Consommation par produit (ce mois), complète
+  const now = new Date();
+  const debutMois = new Date(now.getFullYear(), now.getMonth(), 1);
+  const consoMap = new Map<string, number>();
+  for (const m of mouvements) {
+    if (m.type !== "Sortie") continue;
+    if (new Date(m.cree_le) < debutMois) continue;
+    const nom = m.produits?.nom ?? "?";
+    consoMap.set(nom, (consoMap.get(nom) ?? 0) + m.quantite);
+  }
+  const conso = [...consoMap.entries()]
+    .map(([nom, total]) => ({ nom, total }))
+    .sort((x, y) => y.total - x.total);
 
   const wb = new ExcelJS.Workbook();
   wb.creator = "Stock'ESAT";
 
-  // Inventaire
+  // ══════════ Feuille 1 : Synthèse ══════════
+  const syn = wb.addWorksheet("Synthèse", {
+    views: [{ showGridLines: false }],
+  });
+  syn.getColumn(1).width = 26;
+  syn.getColumn(2).width = 16;
+  syn.mergeCells("A1:E1");
+  const titre = syn.getCell("A1");
+  titre.value = "Stock'ESAT — Synthèse du stock";
+  titre.font = { bold: true, size: 18, color: { argb: BLEU } };
+  syn.getCell("A2").value = `Édité le ${now.toLocaleString("fr-FR")}`;
+  syn.getCell("A2").font = { italic: true, color: { argb: "FF888888" } };
+
+  const kpis: [string, number, string][] = [
+    ["Références actives", a.totalRefs, "FFE7EEFB"],
+    ["Unités en stock", a.unites, "FFE7EEFB"],
+    ["🔴 Ruptures", a.rupture, "FFFCE8E8"],
+    ["🟠 Stocks faibles", a.faible, "FFFDF0DD"],
+    ["🟢 Stocks OK", a.ok, "FFE6F6EC"],
+  ];
+  let r = 4;
+  for (const [label, val, fill] of kpis) {
+    const cL = syn.getCell(`A${r}`);
+    const cV = syn.getCell(`B${r}`);
+    cL.value = label;
+    cL.font = { bold: true };
+    cV.value = val;
+    cV.font = { bold: true, size: 14 };
+    cV.alignment = { horizontal: "center" };
+    for (const c of [cL, cV]) {
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
+      c.border = { bottom: { style: "thin", color: { argb: "FFFFFFFF" } } };
+    }
+    syn.getRow(r).height = 22;
+    r++;
+  }
+
+  // Graphiques (images) — échec silencieux si QuickChart indisponible
+  const doughnut = await chartPng(
+    {
+      type: "doughnut",
+      data: {
+        labels: ["OK", "Faible", "Rupture"],
+        datasets: [
+          {
+            data: [a.ok, a.faible, a.rupture],
+            backgroundColor: ["#1E9E5A", "#E8890C", "#E23D3D"],
+          },
+        ],
+      },
+      options: {
+        plugins: {
+          title: { display: true, text: "Répartition du stock" },
+          legend: { position: "bottom" },
+        },
+      },
+    },
+    360,
+    240
+  );
+  if (doughnut) {
+    const id = wb.addImage({ buffer: doughnut, extension: "png" });
+    syn.addImage(id, { tl: { col: 3, row: 3 }, ext: { width: 320, height: 210 } });
+  }
+
+  const barConso = await chartPng(
+    {
+      type: "bar",
+      data: {
+        labels: a.conso.map((c) => c.jour),
+        datasets: [
+          {
+            label: "Sorties",
+            data: a.conso.map((c) => c.sorties),
+            backgroundColor: "#2557D6",
+          },
+        ],
+      },
+      options: {
+        plugins: {
+          title: { display: true, text: "Consommation (7 derniers jours)" },
+          legend: { display: false },
+        },
+      },
+    },
+    520,
+    240
+  );
+  if (barConso) {
+    const id = wb.addImage({ buffer: barConso, extension: "png" });
+    syn.addImage(id, { tl: { col: 0, row: 11 }, ext: { width: 470, height: 210 } });
+  }
+
+  const topData = a.top.slice(0, 8);
+  const barTop = await chartPng(
+    {
+      type: "bar",
+      data: {
+        labels: topData.map((t) => t.nom),
+        datasets: [
+          {
+            label: "Sorties (mois)",
+            data: topData.map((t) => t.total),
+            backgroundColor: "#6C7BF2",
+          },
+        ],
+      },
+      options: {
+        indexAxis: "y",
+        plugins: {
+          title: { display: true, text: "Produits les plus utilisés (ce mois)" },
+          legend: { display: false },
+        },
+      },
+    },
+    520,
+    260
+  );
+  if (barTop) {
+    const id = wb.addImage({ buffer: barTop, extension: "png" });
+    syn.addImage(id, { tl: { col: 0, row: 24 }, ext: { width: 470, height: 230 } });
+  }
+
+  // ══════════ Feuille 2 : Inventaire ══════════
   const inv = wb.addWorksheet("Inventaire");
   inv.columns = [
     { header: "Référence", key: "ref", width: 20 },
@@ -88,9 +255,23 @@ export async function GET() {
       fgColor: { argb: STATUT_FILL[s] },
     };
   }
+  // Barre visuelle dans la colonne Stock (E)
+  if (produits.length > 0) {
+    inv.addConditionalFormatting({
+      ref: `E2:E${produits.length + 1}`,
+      rules: [
+        {
+          type: "dataBar",
+          gradient: false,
+          cfvo: [{ type: "min" }, { type: "max" }],
+          color: { argb: "FF9DB8EC" },
+        } as unknown as ExcelJS.ConditionalFormattingRule,
+      ],
+    });
+  }
   styliserEntete(inv);
 
-  // À commander
+  // ══════════ Feuille 3 : À commander ══════════
   const wc = wb.addWorksheet("À commander");
   wc.columns = [
     { header: "Produit", key: "nom", width: 34 },
@@ -108,9 +289,44 @@ export async function GET() {
       qte: p.qte,
     });
   }
+  if (cmd.length > 0) {
+    wc.addConditionalFormatting({
+      ref: `E2:E${cmd.length + 1}`,
+      rules: [
+        {
+          type: "dataBar",
+          gradient: false,
+          cfvo: [{ type: "min" }, { type: "max" }],
+          color: { argb: "FFF2B8B8" },
+        } as unknown as ExcelJS.ConditionalFormattingRule,
+      ],
+    });
+  }
   styliserEntete(wc);
 
-  // Historique
+  // ══════════ Feuille 4 : Consommation (mois) ══════════
+  const cs = wb.addWorksheet("Consommation");
+  cs.columns = [
+    { header: "Produit", key: "nom", width: 36 },
+    { header: "Sorties ce mois", key: "total", width: 16 },
+  ];
+  for (const c of conso) cs.addRow({ nom: c.nom, total: c.total });
+  if (conso.length > 0) {
+    cs.addConditionalFormatting({
+      ref: `B2:B${conso.length + 1}`,
+      rules: [
+        {
+          type: "dataBar",
+          gradient: false,
+          cfvo: [{ type: "min" }, { type: "max" }],
+          color: { argb: "FF9DB8EC" },
+        } as unknown as ExcelJS.ConditionalFormattingRule,
+      ],
+    });
+  }
+  styliserEntete(cs);
+
+  // ══════════ Feuille 5 : Historique ══════════
   const hist = wb.addWorksheet("Historique");
   hist.columns = [
     { header: "Date", key: "date", width: 20 },
@@ -135,7 +351,7 @@ export async function GET() {
   styliserEntete(hist);
 
   const buf = await wb.xlsx.writeBuffer();
-  const d = new Date();
+  const d = now;
   const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
   return new Response(Buffer.from(buf as ArrayBuffer), {
