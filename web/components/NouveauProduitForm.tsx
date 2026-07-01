@@ -1,17 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Ref } from "@/lib/data";
 import { sb } from "@/lib/supabase";
 import { genererRef } from "@/lib/genRef";
 
+// Normalise pour comparer sans accents ni casse.
+function norm(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim();
+}
+
 export default function NouveauProduitForm({
   categories,
   sites,
+  existants,
 }: {
   categories: Ref[];
   sites: Ref[];
+  existants: { nom: string; ref: string }[];
 }) {
   const router = useRouter();
   const [nom, setNom] = useState("");
@@ -76,6 +87,16 @@ export default function NouveauProduitForm({
 
   const refApercu = nom.trim() ? genererRef(nom) : "";
 
+  // Suggestions de produits existants ressemblants
+  const nq = norm(nom);
+  const suggestions = useMemo(() => {
+    if (nq.length < 2) return [];
+    return existants
+      .filter((p) => norm(p.nom).includes(nq))
+      .slice(0, 6);
+  }, [existants, nq]);
+  const doublonExact = existants.some((p) => norm(p.nom) === nq && nq.length > 0);
+
   return (
     <form
       onSubmit={submit}
@@ -96,6 +117,33 @@ export default function NouveauProduitForm({
             <p className="text-xs text-slate-400 mt-1">
               Référence auto : <span className="font-mono">{refApercu}</span>
             </p>
+          )}
+
+          {doublonExact && (
+            <p className="mt-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg px-3 py-2">
+              ⚠ Un produit portant ce nom existe déjà.
+            </p>
+          )}
+
+          {!doublonExact && suggestions.length > 0 && (
+            <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+              <p className="text-xs font-semibold text-amber-700 mb-1">
+                Produits déjà existants qui ressemblent :
+              </p>
+              <ul className="text-sm text-slate-700 space-y-0.5">
+                {suggestions.map((p) => (
+                  <li key={p.ref} className="flex justify-between gap-3">
+                    <span>{p.nom}</span>
+                    <span className="text-xs text-slate-400 font-mono">
+                      {p.ref}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-amber-600 mt-1">
+                Vérifiez qu&apos;il ne s&apos;agit pas d&apos;un doublon.
+              </p>
+            </div>
           )}
         </div>
 
