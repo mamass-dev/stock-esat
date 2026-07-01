@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Ref } from "@/lib/data";
 import { sb } from "@/lib/supabase";
@@ -95,7 +96,8 @@ export default function NouveauProduitForm({
       .filter((p) => norm(p.nom).includes(nq))
       .slice(0, 6);
   }, [existants, nq]);
-  const doublonExact = existants.some((p) => norm(p.nom) === nq && nq.length > 0);
+  const exact =
+    nq.length > 0 ? existants.find((p) => norm(p.nom) === nq) : undefined;
 
   return (
     <form
@@ -119,30 +121,36 @@ export default function NouveauProduitForm({
             </p>
           )}
 
-          {doublonExact && (
-            <p className="mt-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg px-3 py-2">
-              ⚠ Un produit portant ce nom existe déjà.
-            </p>
+          {exact && (
+            <Link
+              href={`/produit/${encodeURIComponent(exact.ref)}`}
+              className="mt-2 flex items-center justify-between gap-3 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg px-3 py-2 transition"
+            >
+              <span>⚠ Ce produit existe déjà — cliquez pour l&apos;ouvrir</span>
+              <span className="text-xs font-mono text-red-400">{exact.ref}</span>
+            </Link>
           )}
 
-          {!doublonExact && suggestions.length > 0 && (
+          {!exact && suggestions.length > 0 && (
             <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
               <p className="text-xs font-semibold text-amber-700 mb-1">
-                Produits déjà existants qui ressemblent :
+                Produits existants qui ressemblent (cliquez pour ouvrir) :
               </p>
-              <ul className="text-sm text-slate-700 space-y-0.5">
+              <ul className="text-sm space-y-0.5">
                 {suggestions.map((p) => (
-                  <li key={p.ref} className="flex justify-between gap-3">
-                    <span>{p.nom}</span>
-                    <span className="text-xs text-slate-400 font-mono">
-                      {p.ref}
-                    </span>
+                  <li key={p.ref}>
+                    <Link
+                      href={`/produit/${encodeURIComponent(p.ref)}`}
+                      className="flex justify-between gap-3 rounded-md px-2 py-1 -mx-2 hover:bg-amber-100 transition text-slate-700"
+                    >
+                      <span>{p.nom}</span>
+                      <span className="text-xs text-slate-400 font-mono">
+                        {p.ref}
+                      </span>
+                    </Link>
                   </li>
                 ))}
               </ul>
-              <p className="text-xs text-amber-600 mt-1">
-                Vérifiez qu&apos;il ne s&apos;agit pas d&apos;un doublon.
-              </p>
             </div>
           )}
         </div>

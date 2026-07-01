@@ -142,6 +142,7 @@ class _State extends ConsumerState<AjouterProduitScreen> {
                   ),
                 ]),
               ),
+            _blocSuggestions(ref.watch(_produitsProvider)),
             cats.when(
               loading: () => const LinearProgressIndicator(),
               error: (e, _) => Text('Catégories: $e'),
@@ -213,6 +214,76 @@ class _State extends ConsumerState<AjouterProduitScreen> {
     );
   }
 
+  // Suggestions de produits existants ressemblants (anti-doublon).
+  Widget _blocSuggestions(AsyncValue<List<Produit>> async) {
+    final q = _norm(_nom.text);
+    if (q.length < 2) return const SizedBox.shrink();
+    final produits = async.valueOrNull ?? const <Produit>[];
+    final exacts = produits.where((p) => _norm(p.nom) == q).toList();
+    final sugg =
+        produits.where((p) => _norm(p.nom).contains(q)).take(5).toList();
+    if (exacts.isEmpty && sugg.isEmpty) return const SizedBox.shrink();
+
+    Widget ligne(Produit p, Color c) => InkWell(
+          onTap: () => context.push('/admin/modifier', extra: p),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+            child: Row(children: [
+              Expanded(
+                child: Text(p.nom,
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: c)),
+              ),
+              Icon(Icons.chevron_right_rounded, color: c, size: 20),
+            ]),
+          ),
+        );
+
+    if (exacts.isNotEmpty) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: AppColors.ruptureBg,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Padding(
+            padding: EdgeInsets.only(left: 6, bottom: 2),
+            child: Text('⚠ Ce produit existe déjà — touchez pour l\'ouvrir',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.rupture)),
+          ),
+          ...exacts.map((p) => ligne(p, AppColors.rupture)),
+        ]),
+      );
+    }
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.faibleBg,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Padding(
+          padding: EdgeInsets.only(left: 6, bottom: 2),
+          child: Text('Produits existants qui ressemblent :',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.faible)),
+        ),
+        ...sugg.map((p) => ligne(p, AppColors.textMain)),
+      ]),
+    );
+  }
+
   Widget _champ(TextEditingController c, String label,
       {String? hint,
       bool number = false,
@@ -259,3 +330,15 @@ final _categoriesProvider =
     FutureProvider((ref) => ref.read(produitRepoProvider).categories());
 final _sitesProvider =
     FutureProvider((ref) => ref.read(produitRepoProvider).sites());
+final _produitsProvider =
+    FutureProvider((ref) => ref.read(produitRepoProvider).tous());
+
+String _norm(String s) => s
+    .toLowerCase()
+    .replaceAll(RegExp(r'[àáâãäå]'), 'a')
+    .replaceAll(RegExp(r'[èéêë]'), 'e')
+    .replaceAll(RegExp(r'[ìíîï]'), 'i')
+    .replaceAll(RegExp(r'[òóôõö]'), 'o')
+    .replaceAll(RegExp(r'[ùúûü]'), 'u')
+    .replaceAll('ç', 'c')
+    .trim();
