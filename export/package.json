@@ -1,0 +1,13 @@
+{
+  "name": "stock-esat-export",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "export": "node export.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.0",
+    "exceljs": "^4.4.0"
+  }
+}
