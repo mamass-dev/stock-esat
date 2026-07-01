@@ -158,7 +158,7 @@ class _State extends ConsumerState<AjouterProduitScreen> {
                 (s) => s.id, (s) => s.nom, (v) => setState(() => _siteId = v)),
             ),
             _champ(_unite, 'Unité', hint: 'bidon, sac, boîte…'),
-            _champ(_stock, 'Stock initial', number: true),
+            _champ(_stock, 'Stock actuel (quantité en réserve)', number: true),
             _champ(_seuilMini, 'Seuil mini (alerte 🟠)', number: true),
             _champ(_seuilCible, 'Seuil cible (à recommander)', number: true),
             const SizedBox(height: 24),

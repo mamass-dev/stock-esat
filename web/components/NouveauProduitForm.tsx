@@ -191,7 +191,12 @@ export default function NouveauProduitForm({
         </div>
 
         <Field label="Unité (bidon, sac…)" value={unite} onChange={setUnite} />
-        <Field label="Stock initial" value={stock} onChange={setStock} num />
+        <Field
+          label="Stock actuel (quantité en réserve)"
+          value={stock}
+          onChange={setStock}
+          num
+        />
         <Field label="Seuil mini 🟠" value={seuilMini} onChange={setSeuilMini} num />
         <Field label="Seuil cible" value={seuilCible} onChange={setSeuilCible} num />
 
