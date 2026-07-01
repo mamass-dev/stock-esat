@@ -62,14 +62,19 @@ class _MouvementScreenState extends ConsumerState<MouvementScreen> {
     setState(() => _enCours = true);
     final p = widget.args.produit;
     final op = ref.read(operateurCourantProvider);
+    final lieu = ref.read(sessionLieuProvider);
     try {
       await ref.read(mouvementRepoProvider).enregistrer(
             type: widget.args.mode,
             produitId: p.id,
+            siteId: lieu?.id,
             quantite: _qte,
             operateurId: op?.id,
           );
-      final maj = await ref.read(produitRepoProvider).parId(p.id);
+      final maj = lieu != null
+          ? await ref.read(produitRepoProvider).parIdLieu(p.id, lieu.id)
+          : await ref.read(produitRepoProvider).parId(p.id);
+      ref.invalidate(stocksLieuProvider);
       if (!mounted) return;
       buzzSuccess();
       setState(() {

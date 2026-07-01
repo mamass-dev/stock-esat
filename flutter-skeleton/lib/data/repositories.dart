@@ -28,6 +28,21 @@ final operateurCourantProvider = StateProvider<Operateur?>((ref) => null);
 /// qui doivent être re-vérifiées côté base (ex. ajout de produit).
 final sessionPinProvider = StateProvider<String?>((ref) => null);
 
+/// Lieu courant (site ou prestation) choisi par l'opérateur.
+/// Tous les mouvements et la consultation portent sur ce lieu.
+final sessionLieuProvider = StateProvider<Site?>((ref) => null);
+
+/// Liste des lieux (sites + prestations).
+final lieuxProvider =
+    FutureProvider<List<Site>>((ref) => ref.read(produitRepoProvider).sites());
+
+/// Stocks du lieu courant (vide si aucun lieu choisi).
+final stocksLieuProvider = FutureProvider.autoDispose<List<Produit>>((ref) {
+  final lieu = ref.watch(sessionLieuProvider);
+  if (lieu == null) return Future.value(<Produit>[]);
+  return ref.read(produitRepoProvider).stocksPourLieu(lieu.id);
+});
+
 /// ── Auth par PIN (RPC login_operateur) ──
 class AuthRepository {
   Future<Operateur?> loginParPin(String pin) async {
@@ -57,6 +72,95 @@ class ProduitRepository {
   Future<Produit> parId(String id) async {
     final row = await _sb.from('produits').select().eq('id', id).single();
     return Produit.fromMap(row);
+  }
+
+  // Produit avec le stock/seuils d'un LIEU précis (à partir d'une ligne stocks).
+  Produit _fromStock(Map<String, dynamic> row) {
+    final p = row['produits'] as Map<String, dynamic>;
+    return Produit(
+      id: p['id'] as String,
+      ref: p['ref'] as String,
+      nom: p['nom'] as String,
+      photoUrl: p['photo_url'] as String?,
+      unite: p['unite'] as String?,
+      categorieId: p['categorie_id'] as String?,
+      stockCourant: (row['stock_courant'] ?? 0) as int,
+      seuilMini: (row['seuil_mini'] ?? 0) as int,
+      seuilRupture: (row['seuil_rupture'] ?? 0) as int,
+      seuilCible: (row['seuil_cible'] ?? 0) as int,
+    );
+  }
+
+  /// Stocks d'un lieu (produits présents à ce lieu, avec leur quantité).
+  Future<List<Produit>> stocksPourLieu(String siteId) async {
+    final rows = await _sb
+        .from('stocks')
+        .select(
+            'stock_courant,seuil_mini,seuil_rupture,seuil_cible,produits(id,ref,nom,photo_url,unite,categorie_id,actif)')
+        .eq('site_id', siteId);
+    return (rows as List)
+        .where((e) => (e['produits']?['actif'] ?? true) == true)
+        .map((e) => _fromStock(e))
+        .toList()
+      ..sort((a, b) => a.nom.compareTo(b.nom));
+  }
+
+  /// Résout un scan pour un LIEU : renvoie le produit avec son stock à ce lieu
+  /// (0 si pas encore de stock à ce lieu). Null si le code est inconnu.
+  Future<Produit?> parScanLieu(String payload, String siteId) async {
+    final ref = payload.startsWith('P:') ? payload.substring(2) : payload;
+    final prod = await _sb
+        .from('produits')
+        .select('id,ref,nom,photo_url,unite,categorie_id')
+        .eq('ref', ref)
+        .eq('actif', true)
+        .maybeSingle();
+    if (prod == null) return null;
+    final st = await _sb
+        .from('stocks')
+        .select('stock_courant,seuil_mini,seuil_rupture,seuil_cible')
+        .eq('produit_id', prod['id'])
+        .eq('site_id', siteId)
+        .maybeSingle();
+    return Produit(
+      id: prod['id'] as String,
+      ref: prod['ref'] as String,
+      nom: prod['nom'] as String,
+      photoUrl: prod['photo_url'] as String?,
+      unite: prod['unite'] as String?,
+      categorieId: prod['categorie_id'] as String?,
+      stockCourant: (st?['stock_courant'] ?? 0) as int,
+      seuilMini: (st?['seuil_mini'] ?? 0) as int,
+      seuilRupture: (st?['seuil_rupture'] ?? 0) as int,
+      seuilCible: (st?['seuil_cible'] ?? 0) as int,
+    );
+  }
+
+  /// Stock d'un produit à un lieu (après un mouvement) — pour rafraîchir.
+  Future<Produit> parIdLieu(String produitId, String siteId) async {
+    final prod = await _sb
+        .from('produits')
+        .select('id,ref,nom,photo_url,unite,categorie_id')
+        .eq('id', produitId)
+        .single();
+    final st = await _sb
+        .from('stocks')
+        .select('stock_courant,seuil_mini,seuil_rupture,seuil_cible')
+        .eq('produit_id', produitId)
+        .eq('site_id', siteId)
+        .maybeSingle();
+    return Produit(
+      id: prod['id'] as String,
+      ref: prod['ref'] as String,
+      nom: prod['nom'] as String,
+      photoUrl: prod['photo_url'] as String?,
+      unite: prod['unite'] as String?,
+      categorieId: prod['categorie_id'] as String?,
+      stockCourant: (st?['stock_courant'] ?? 0) as int,
+      seuilMini: (st?['seuil_mini'] ?? 0) as int,
+      seuilRupture: (st?['seuil_rupture'] ?? 0) as int,
+      seuilCible: (st?['seuil_cible'] ?? 0) as int,
+    );
   }
 
   Future<List<Produit>> tous() async {
@@ -208,12 +312,14 @@ class MouvementRepository {
     required String type, // 'Entrée' | 'Sortie'
     required String produitId,
     required int quantite,
+    String? siteId, // lieu courant
     String? operateurId,
     String source = 'Scan',
   }) async {
     await _sb.from('mouvements').insert({
       'type': type,
       'produit_id': produitId,
+      'site_id': siteId,
       'quantite': quantite,
       'operateur_id': operateurId,
       'client_key': _uuid.v4(),

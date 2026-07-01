@@ -25,7 +25,28 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     setState(() => _traite = true);
     buzz();
 
-    final produit = await ref.read(produitRepoProvider).parScan(code);
+    final lieu = ref.read(sessionLieuProvider);
+    if (lieu == null) {
+      await showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('📍 Aucun lieu'),
+          content: const Text(
+              "Choisissez d'abord un lieu (sur l'accueil ou l'écran Stocks)."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK', style: TextStyle(fontSize: 20)),
+            ),
+          ],
+        ),
+      );
+      if (mounted) context.go('/home');
+      return;
+    }
+
+    final produit =
+        await ref.read(produitRepoProvider).parScanLieu(code, lieu.id);
     if (!mounted) return;
 
     if (produit == null) {

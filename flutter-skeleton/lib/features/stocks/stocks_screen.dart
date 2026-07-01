@@ -6,12 +6,6 @@ import '../../core/widgets.dart';
 import '../../data/models.dart';
 import '../../data/repositories.dart';
 
-final produitsProvider = FutureProvider<List<Produit>>(
-    (ref) => ref.read(produitRepoProvider).tous());
-
-final lieuxProvider = FutureProvider<List<Site>>(
-    (ref) => ref.read(produitRepoProvider).sites());
-
 enum FiltreStock { tous, ok, faible, rupture }
 
 class StocksScreen extends ConsumerStatefulWidget {
@@ -23,7 +17,6 @@ class StocksScreen extends ConsumerStatefulWidget {
 class _StocksScreenState extends ConsumerState<StocksScreen> {
   FiltreStock _filtre = FiltreStock.tous;
   String _query = '';
-  String? _lieuId; // filtre par site/prestation
 
   FiltreStock _statut(Produit p) {
     if (p.stockCourant <= p.seuilRupture) return FiltreStock.rupture;
@@ -31,120 +24,145 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
     return FiltreStock.ok;
   }
 
-  void _toggle(FiltreStock f) => setState(
-      () => _filtre = (_filtre == f) ? FiltreStock.tous : f);
+  void _toggle(FiltreStock f) =>
+      setState(() => _filtre = (_filtre == f) ? FiltreStock.tous : f);
 
   @override
   Widget build(BuildContext context) {
-    final async = ref.watch(produitsProvider);
+    final lieu = ref.watch(sessionLieuProvider);
     final lieux = ref.watch(lieuxProvider).valueOrNull ?? const <Site>[];
+    final async = ref.watch(stocksLieuProvider);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Stocks')),
       body: AppBackground(
         child: SafeArea(
           top: false,
-          child: async.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('Erreur : $e')),
-            data: (tous) {
-              final ok = tous.where((p) => _statut(p) == FiltreStock.ok).length;
-              final faible =
-                  tous.where((p) => _statut(p) == FiltreStock.faible).length;
-              final rupture =
-                  tous.where((p) => _statut(p) == FiltreStock.rupture).length;
-
-              var produits = _filtre == FiltreStock.tous
-                  ? tous
-                  : tous.where((p) => _statut(p) == _filtre).toList();
-              if (_lieuId != null) {
-                produits =
-                    produits.where((p) => p.siteId == _lieuId).toList();
-              }
-              if (_query.isNotEmpty) {
-                final q = _query.toLowerCase();
-                produits =
-                    produits.where((p) => p.nom.toLowerCase().contains(q)).toList();
-              }
-
-              return Column(
-                children: [
-                  // ── Aperçu chiffré (cliquable = filtre) ──
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(Dim.pad, 6, Dim.pad, 0),
-                    child: Row(
-                      children: [
-                        _stat('$ok', 'OK', AppColors.ok, AppColors.okBg,
-                            FiltreStock.ok),
-                        const SizedBox(width: 10),
-                        _stat('$faible', 'Faibles', AppColors.faible,
-                            AppColors.faibleBg, FiltreStock.faible),
-                        const SizedBox(width: 10),
-                        _stat('$rupture', 'Ruptures', AppColors.rupture,
-                            AppColors.ruptureBg, FiltreStock.rupture),
-                      ],
+          child: Column(
+            children: [
+              if (lieux.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(Dim.pad, 8, Dim.pad, 4),
+                  child: _selecteurLieu(lieux, lieu),
+                ),
+              if (lieu == null)
+                const Expanded(
+                  child: Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(Dim.pad),
+                      child: Text(
+                        'Choisissez d\'abord un lieu\n(en haut ou sur l\'accueil)',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 18, color: AppColors.textSoft),
+                      ),
                     ),
                   ),
-                  // ── Recherche ──
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(Dim.pad, 14, Dim.pad, 6),
-                    child: _recherche(),
+                )
+              else
+                Expanded(
+                  child: async.when(
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (e, _) => Center(child: Text('Erreur : $e')),
+                    data: (tous) => _contenu(tous),
                   ),
-                  // ── Filtre par lieu ──
-                  if (lieux.isNotEmpty)
-                    Padding(
-                      padding:
-                          const EdgeInsets.fromLTRB(Dim.pad, 0, Dim.pad, 8),
-                      child: _filtreLieu(lieux),
-                    ),
-                  // ── Ligne d'info / réinitialiser ──
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: Dim.pad),
-                    child: Row(
-                      children: [
-                        Text('${produits.length} produit${produits.length > 1 ? "s" : ""}',
-                            style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textSoft)),
-                        const Spacer(),
-                        if (_filtre != FiltreStock.tous)
-                          TextButton.icon(
-                            onPressed: () =>
-                                setState(() => _filtre = FiltreStock.tous),
-                            icon: const Icon(Icons.close_rounded, size: 18),
-                            label: const Text('Tout voir'),
-                          ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: RefreshIndicator(
-                      onRefresh: () => ref.refresh(produitsProvider.future),
-                      child: produits.isEmpty
-                          ? ListView(children: const [
-                              SizedBox(height: 60),
-                              Center(
-                                  child: Text('Aucun produit',
-                                      style: TextStyle(
-                                          fontSize: 18,
-                                          color: AppColors.textSoft))),
-                            ])
-                          : ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(
-                                  Dim.pad, 4, Dim.pad, Dim.pad),
-                              itemCount: produits.length,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(height: 12),
-                              itemBuilder: (_, i) => _carte(produits[i]),
-                            ),
-                    ),
-                  ),
-                ],
-              );
-            },
+                ),
+            ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _contenu(List<Produit> tous) {
+    final ok = tous.where((p) => _statut(p) == FiltreStock.ok).length;
+    final faible = tous.where((p) => _statut(p) == FiltreStock.faible).length;
+    final rupture = tous.where((p) => _statut(p) == FiltreStock.rupture).length;
+
+    var produits = _filtre == FiltreStock.tous
+        ? tous
+        : tous.where((p) => _statut(p) == _filtre).toList();
+    if (_query.isNotEmpty) {
+      final q = _query.toLowerCase();
+      produits = produits.where((p) => p.nom.toLowerCase().contains(q)).toList();
+    }
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(Dim.pad, 4, Dim.pad, 0),
+          child: Row(children: [
+            _stat('$ok', 'OK', AppColors.ok, AppColors.okBg, FiltreStock.ok),
+            const SizedBox(width: 10),
+            _stat('$faible', 'Faibles', AppColors.faible, AppColors.faibleBg,
+                FiltreStock.faible),
+            const SizedBox(width: 10),
+            _stat('$rupture', 'Ruptures', AppColors.rupture, AppColors.ruptureBg,
+                FiltreStock.rupture),
+          ]),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(Dim.pad, 12, Dim.pad, 8),
+          child: _recherche(),
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () => ref.refresh(stocksLieuProvider.future),
+            child: produits.isEmpty
+                ? ListView(children: const [
+                    SizedBox(height: 60),
+                    Center(
+                        child: Text('Aucun produit à ce lieu',
+                            style: TextStyle(
+                                fontSize: 18, color: AppColors.textSoft))),
+                  ])
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(
+                        Dim.pad, 4, Dim.pad, Dim.pad),
+                    itemCount: produits.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (_, i) => _carte(produits[i]),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _selecteurLieu(List<Site> lieux, Site? courant) {
+    final sites = lieux.where((l) => l.type == 'Site').toList();
+    final presta = lieux.where((l) => l.type == 'Prestation').toList();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(Dim.radius),
+        boxShadow: Shadows.soft,
+      ),
+      child: Row(children: [
+        const Icon(Icons.place_rounded, color: AppColors.primary, size: 22),
+        const SizedBox(width: 8),
+        Expanded(
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String?>(
+              isExpanded: true,
+              value: courant?.id,
+              hint: const Text('Choisir un lieu'),
+              items: [
+                ...sites.map((s) => DropdownMenuItem<String?>(
+                    value: s.id, child: Text('📍 ${s.nom}'))),
+                ...presta.map((s) => DropdownMenuItem<String?>(
+                    value: s.id, child: Text('🧾 ${s.nom}  ·  prestation'))),
+              ],
+              onChanged: (v) {
+                final l = lieux.where((x) => x.id == v).toList();
+                ref.read(sessionLieuProvider.notifier).state =
+                    l.isEmpty ? null : l.first;
+              },
+            ),
+          ),
+        ),
+      ]),
     );
   }
 
@@ -161,49 +179,18 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
             borderRadius: BorderRadius.circular(Dim.radius),
             boxShadow: sel ? Shadows.colored(c) : null,
           ),
-          child: Column(
-            children: [
-              Text(n,
-                  style: TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w700,
-                      color: sel ? Colors.white : c)),
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: sel ? Colors.white : c)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _filtreLieu(List<Site> lieux) {
-    final sites = lieux.where((l) => l.type == 'Site').toList();
-    final presta = lieux.where((l) => l.type == 'Prestation').toList();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(Dim.radius),
-        boxShadow: Shadows.soft,
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String?>(
-          isExpanded: true,
-          value: _lieuId,
-          hint: const Text('Tous les lieux'),
-          items: [
-            const DropdownMenuItem<String?>(
-                value: null, child: Text('Tous les lieux')),
-            ...sites.map((s) => DropdownMenuItem<String?>(
-                value: s.id, child: Text('📍 ${s.nom}'))),
-            ...presta.map((s) => DropdownMenuItem<String?>(
-                value: s.id, child: Text('🧾 ${s.nom}  ·  prestation'))),
-          ],
-          onChanged: (v) => setState(() => _lieuId = v),
+          child: Column(children: [
+            Text(n,
+                style: TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.w700,
+                    color: sel ? Colors.white : c)),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: sel ? Colors.white : c)),
+          ]),
         ),
       ),
     );
@@ -216,12 +203,6 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
       decoration: InputDecoration(
         hintText: 'Rechercher un produit…',
         prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textSoft),
-        suffixIcon: _query.isNotEmpty
-            ? IconButton(
-                icon: const Icon(Icons.clear_rounded),
-                onPressed: () => setState(() => _query = ''),
-              )
-            : null,
         filled: true,
         fillColor: AppColors.surface,
         contentPadding: const EdgeInsets.symmetric(vertical: 4),
@@ -234,12 +215,6 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
   }
 
   Widget _carte(Produit p) {
-    final st = _statut(p);
-    final (c, bg, mot) = switch (st) {
-      FiltreStock.rupture => (AppColors.rupture, AppColors.ruptureBg, 'Rupture'),
-      FiltreStock.faible => (AppColors.faible, AppColors.faibleBg, 'Faible'),
-      _ => (AppColors.ok, AppColors.okBg, 'OK'),
-    };
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -250,10 +225,10 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
       child: Row(
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             child: SizedBox(
-              width: 66,
-              height: 66,
+              width: 60,
+              height: 60,
               child: p.photoUrl != null
                   ? CachedNetworkImage(imageUrl: p.photoUrl!, fit: BoxFit.cover)
                   : Container(
@@ -264,43 +239,15 @@ class _StocksScreenState extends ConsumerState<StocksScreen> {
           ),
           const SizedBox(width: 14),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(p.nom,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.w600, height: 1.15)),
-                const SizedBox(height: 4),
-                Text(mot,
-                    style: TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w700, color: c)),
-              ],
-            ),
+            child: Text(p.nom,
+                style:
+                    const TextStyle(fontSize: 19, fontWeight: FontWeight.w600)),
           ),
-          const SizedBox(width: 10),
-          // Stock mis en avant
-          Container(
-            width: 64,
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              children: [
-                Text('${p.stockCourant}',
-                    style: TextStyle(
-                        fontSize: 26, fontWeight: FontWeight.w700, color: c)),
-                if (p.unite != null)
-                  Text(p.unite!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 11, color: c)),
-              ],
-            ),
-          ),
+          const SizedBox(width: 8),
+          StatusPill(
+              stock: p.stockCourant,
+              seuilMini: p.seuilMini,
+              seuilRupture: p.seuilRupture),
         ],
       ),
     );
